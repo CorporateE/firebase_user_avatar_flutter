@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 
 class AboutPage extends StatelessWidget {
   @override
-  Widget build(BuildContext context) {
+  Widget build(context) {
     return Scaffold(
       appBar: AppBar(
         title: Text('About'),
@@ -45,7 +45,7 @@ class AboutPage extends StatelessWidget {
     );
   }
 
-  Widget _buildUserInfo({BuildContext context}) {
+  Widget _buildUserInfo({context}) {
     final user = Provider.of<User>(context);
     final database = Provider.of<FirestoreService>(context);
     return StreamBuilder<AvatarReference>(

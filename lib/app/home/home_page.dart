@@ -1,13 +1,24 @@
 import 'dart:async';
-
 import 'package:firebase_user_avatar_flutter/app/home/about_page.dart';
+import 'package:firebase_user_avatar_flutter/app/home/edit_job_page.dart';
+import 'package:firebase_user_avatar_flutter/app/home/job_list_tile.dart';
 import 'package:firebase_user_avatar_flutter/common_widgets/avatar.dart';
+import 'package:firebase_user_avatar_flutter/models/avatar_reference.dart';
+import 'package:firebase_user_avatar_flutter/services/firebase_auth_service.dart';
+import 'package:firebase_user_avatar_flutter/services/firebase_storage_service.dart';
+import 'package:firebase_user_avatar_flutter/services/firestore_service.dart';
+import 'package:firebase_user_avatar_flutter/services/image_picker_service.dart';
+import 'package:firebase_user_avatar_flutter/test_fireb_services/database.dart';
+import 'package:firebase_user_avatar_flutter/test_fireb_services/job_model.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 
 class HomePage extends StatelessWidget {
   Future<void> _signOut(BuildContext context) async {
     try {
-      // TODO: Implement
+      final auth = Provider.of<FirebaseAuthService>(context, listen: false);
+      await auth.signOut();
     } catch (e) {
       print(e);
     }
@@ -25,13 +36,26 @@ class HomePage extends StatelessWidget {
   Future<void> _chooseAvatar(BuildContext context) async {
     try {
       // 1. Get image from picker
-      // 2. Upload to storage
-      // 3. Save url to Firestore
-      // 4. (optional) delete local file as no longer needed
+      final imagePicker =
+          Provider.of<ImagePickerService>(context, listen: false);
+      final file = await imagePicker.pickImage(source: ImageSource.gallery);
+      if (file != null) {
+        // 2. Upload to storage
+        final storage =
+            Provider.of<FirebaseStorageService>(context, listen: false);
+        final downloadUrl = await storage.uploadAvatar(file: file);
+        // 3. Save url to Firestore
+        final database = Provider.of<FirestoreService>(context, listen: false);
+        await database.setAvatarReference(AvatarReference(downloadUrl));
+        // 4. (optional) delete local file as no longer needed
+        await file.delete();
+      }
     } catch (e) {
       print(e);
     }
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -64,17 +88,47 @@ class HomePage extends StatelessWidget {
           ),
         ),
       ),
+      body: _buildContents(context),
+      floatingActionButton: FloatingActionButton(
+        child: Icon(Icons.add_business),
+        onPressed: () => EditJobPage.show(context),
+      ),
     );
   }
 
   Widget _buildUserInfo({BuildContext context}) {
-    // TODO: Download and show avatar from Firebase storage
-    return Avatar(
-      photoUrl: null,
-      radius: 50,
-      borderColor: Colors.black54,
-      borderWidth: 2.0,
-      onPressed: () => _chooseAvatar(context),
+    final database = Provider.of<FirestoreService>(context, listen: false);
+    return StreamBuilder<AvatarReference>(
+      stream: database.avatarReferenceStream(),
+      builder: (context, snapshot) {
+        final avatarReference = snapshot.data;
+        return Avatar(
+          photoUrl: avatarReference?.downloadUrl,
+          radius: 50,
+          borderColor: Colors.black54,
+          borderWidth: 2.0,
+          onPressed: () => _chooseAvatar(context),
+        );
+      },
+    );
+  }
+
+  Widget _buildContents(BuildContext context) {
+    final database = Provider.of<Database>(context, listen: false);
+    return StreamBuilder<List<Job>>(
+      stream: database.jobsStream(),
+      builder: (context, snapshot) {
+        if (snapshot.hasData) {
+          final jobs = snapshot.data;
+          final children = jobs.map((job) => JobListTile(job: job, onTap: () => EditJobPage.show(context, job:job),)).toList();
+          return ListView(children: children);
+        }
+        if (snapshot.hasError) {
+          print('$snapshot.error');
+          return Center(child: Text('Error in the stream has occured: $snapshot.error'));
+        }
+        return Center(child: CircularProgressIndicator());
+      },
     );
   }
 }
